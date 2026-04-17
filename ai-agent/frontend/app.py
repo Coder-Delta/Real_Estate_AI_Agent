@@ -60,20 +60,23 @@ if prompt:
         st.write(prompt)
 
     try:
-        response = requests.post(
-            f"{settings.backend_url}/chat",
-            json={"messages": st.session_state.messages},
-            timeout=30,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        st.session_state.latest_payload = payload
-
-        st.session_state.messages.append(
-            {"role": "assistant", "content": payload["reply"]}
-        )
-
         with st.chat_message("assistant"):
+            thinking_placeholder = st.empty()
+            thinking_placeholder.markdown("Aria is thinking...")
+
+            response = requests.post(
+                f"{settings.backend_url}/chat",
+                json={"messages": st.session_state.messages},
+                timeout=30,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            st.session_state.latest_payload = payload
+
+            st.session_state.messages.append(
+                {"role": "assistant", "content": payload["reply"]}
+            )
+            thinking_placeholder.empty()
             st.write(payload["reply"])
 
         if payload["status"] == "completed":
