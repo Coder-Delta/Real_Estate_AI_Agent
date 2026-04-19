@@ -251,6 +251,13 @@ def _merge_state(state: LeadState, text: str) -> None:
     if timeline:
         state.timeline = timeline
 
+    # If the user shared qualification details but explicit intent was missed,
+    # move the conversation forward instead of staying in greeting mode.
+    if state.intent in {"greeting", "inquiry"} and any(
+        value is not None for value in (state.location, state.budget, state.timeline)
+    ):
+        state.intent = "buy"
+
 
 def _extract_intent(text: str) -> str:
     normalized = text.lower()
@@ -262,7 +269,7 @@ def _extract_intent(text: str) -> str:
         return "inquiry"
     if any(word in normalized for word in ("hi", "hello", "hey")) and len(normalized.split()) <= 4:
         return "greeting"
-    return "greeting"
+    return "inquiry"
 
 
 def _extract_name(text: str) -> str | None:
@@ -346,11 +353,18 @@ def _should_finalize(state: LeadState, latest_message: str) -> bool:
 
 
 def _build_next_reply(state: LeadState) -> str:
-    if state.intent in {"greeting", "inquiry"}:
+    has_qualification_signal = any(
+        value is not None for value in (state.location, state.budget, state.timeline)
+    )
+    if state.intent in {"greeting", "inquiry"} and not has_qualification_signal:
+        if state.intent == "inquiry":
+            return "Absolutely, happy to help. Are you mainly exploring, buying, or selling right now?"
         return "I’d love to help. Are you looking to buy, sell, or just explore the market right now?"
 
+    effective_intent = state.intent if state.intent in {"buy", "sell"} else "buy"
+
     if not state.location:
-        if state.intent == "sell":
+        if effective_intent == "sell":
             return "That makes sense. Which area is the property in?"
         return "That sounds exciting. Which area are you hoping to focus on?"
 
