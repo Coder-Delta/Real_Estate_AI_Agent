@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import re
 from zoneinfo import ZoneInfo
 
+from backend.booking import build_booking_message
 
 READINESS_PATTERNS = (
     "call me",
@@ -371,16 +372,18 @@ def _build_closing_reply(state: LeadState, meeting_date: str) -> str:
         f" around ${state.budget:,}" if state.budget is not None else ""
     )
     opening = f"{state.name}, you’ve" if state.name else "You’ve"
+    booking_note = build_booking_message(state.timeline or "")
 
     if state.intent == "sell":
         return (
             f"{opening} shared enough for us to line up the right listing specialist{location_phrase}{budget_phrase}. "
-            f"I can tee up a conversation and hold {meeting_date} if that works for you."
+            f"I can tee up a conversation and hold {meeting_date} if that works for you. "
+            f"{booking_note}"
         )
 
     return (
         f"{opening} shared enough for us to match you with the right property specialist{location_phrase}{budget_phrase}. "
-        f"I can set aside {meeting_date} for a quick call and walk you through the best next options."
+        f"I can set aside {meeting_date} for a quick call and walk you through the best next options. {booking_note}"
     )
 
 

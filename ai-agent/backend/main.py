@@ -132,14 +132,14 @@ def _persist_completed_lead(payload: AssistantPayload, conversation: list[ChatMe
     )
     lead_payload = {
         "intent": payload.intent,
-        "name": payload.name or "",
-        "budget": str(payload.budget or ""),
-        "location": payload.location or "",
-        "timeline": payload.timeline or "",
+        "name": payload.name,
+        "budget": str(payload.budget) if payload.budget else None,
+        "location": payload.location,
+        "timeline": payload.timeline,
         "status": payload.status,
         "action": payload.action,
-        "lead_summary": payload.lead_summary or "",
-        "suggested_meeting_date": payload.suggested_meeting_date or "",
+        "lead_summary": payload.lead_summary,
+        "suggested_meeting_date": payload.suggested_meeting_date,
         "reply": payload.reply,
         "transcript": transcript,
     }
