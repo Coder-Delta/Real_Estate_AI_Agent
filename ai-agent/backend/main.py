@@ -19,6 +19,7 @@ if str(CURRENT_DIR) not in sys.path:
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from database import save_lead as save_lead_to_database
 from emailer import send_email
 from logic import AssistantPayload, ChatMessage, build_assistant_payload
 from llm import maybe_generate_assistant_payload
@@ -129,21 +130,23 @@ def _persist_completed_lead(payload: AssistantPayload, conversation: list[ChatMe
         for message in conversation
         if message.role in {"user", "assistant"}
     )
-    save_lead(
-        {
-            "intent": payload.intent,
-            "name": payload.name or "",
-            "budget": str(payload.budget or ""),
-            "location": payload.location or "",
-            "timeline": payload.timeline or "",
-            "status": payload.status,
-            "action": payload.action,
-            "lead_summary": payload.lead_summary or "",
-            "suggested_meeting_date": payload.suggested_meeting_date or "",
-            "reply": payload.reply,
-            "transcript": transcript,
-        }
-    )
+    lead_payload = {
+        "intent": payload.intent,
+        "name": payload.name or "",
+        "budget": str(payload.budget or ""),
+        "location": payload.location or "",
+        "timeline": payload.timeline or "",
+        "status": payload.status,
+        "action": payload.action,
+        "lead_summary": payload.lead_summary or "",
+        "suggested_meeting_date": payload.suggested_meeting_date or "",
+        "reply": payload.reply,
+        "transcript": transcript,
+    }
+
+    saved_to_database = save_lead_to_database(lead_payload)
+    if not saved_to_database:
+        save_lead(lead_payload)
 
 
 def _notify(payload: AssistantPayload) -> None:

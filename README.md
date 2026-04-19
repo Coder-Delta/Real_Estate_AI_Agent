@@ -41,6 +41,7 @@ Agent_tutorial/
 - Python 3.13+ recommended
 - A Gemini API key if you want LLM responses
 - Optional SMTP credentials for email alerts
+- Optional Supabase project credentials for database persistence
 
 ## Setup
 
@@ -89,12 +90,18 @@ SMTP_PORT=587
 SMTP_USERNAME=your_email@example.com
 SMTP_PASSWORD=your_app_password
 NOTIFICATION_EMAIL=sales@example.com
+
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_supabase_service_role_or_anon_key
+SUPABASE_TABLE=leads
 ```
 
 Notes:
 
 - Set `ENABLE_GEMINI=false` to force the local assistant flow.
 - `GEMINI_TIMEOUT_SECONDS` is optional. Default is `30`.
+- If `SUPABASE_URL` and `SUPABASE_KEY` are set, completed leads are written to Supabase first.
+- If Supabase is not configured or the insert fails, the backend falls back to `ai-agent/data/leads.csv`.
 - If Gemini fails or times out, the backend falls back to local logic instead of breaking the chat.
 
 ## Run The App
@@ -160,6 +167,8 @@ Completed leads are appended to:
 ```text
 ai-agent/data/leads.csv
 ```
+
+When Supabase is configured, completed leads are sent to the `SUPABASE_TABLE` table first and only fall back to CSV when the database write is unavailable.
 
 The CSV includes:
 
