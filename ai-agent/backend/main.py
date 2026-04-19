@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -19,7 +21,6 @@ if str(CURRENT_DIR) not in sys.path:
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from database import save_lead as save_lead_to_database
 from emailer import send_email
 from logic import AssistantPayload, ChatMessage, build_assistant_payload
 from llm import maybe_generate_assistant_payload
@@ -98,6 +99,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             _persist_completed_lead(payload, conversation)
             _notify(payload)
 
+        _save_conversation_history(conversation, payload)
+
         return ChatResponse(**payload.to_dict())
     except ValueError as exc:
         logger.warning("Chat request rejected: %s", exc)
@@ -144,23 +147,31 @@ def _persist_completed_lead(payload: AssistantPayload, conversation: list[ChatMe
         "transcript": transcript,
     }
 
-    saved_to_database = save_lead_to_database(lead_payload)
-    if not saved_to_database:
-        save_lead(lead_payload)
+    save_lead(lead_payload)
 
 
-def _notify(payload: AssistantPayload) -> None:
-    if not settings.notification_email or not payload.lead_summary:
-        return
+def _save_conversation_history(conversation: list[ChatMessage], payload: AssistantPayload) -> None:
+    history_path = settings.lead_log_path.parent / "conversations.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "conversation": [
+            {"role": msg.role, "content": msg.content} for msg in conversation
+        ],
+        "response": payload.to_dict(),
+    }
 
     try:
-        send_email(
-            subject=f"New {payload.intent} lead for {payload.location or 'unknown location'}",
-            message=(
-                f"{payload.lead_summary}\n"
-                f"Suggested meeting date: {payload.suggested_meeting_date or 'Not set'}\n"
-                f"Reply: {payload.reply}"
-            ),
-        )
+        if history_path.exists():
+            with history_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            data = []
+
+        data.append(entry)
+
+        with history_path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
     except Exception:
-        return
+        pass  # Silently fail if saving history fails

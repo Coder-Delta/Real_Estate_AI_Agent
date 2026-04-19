@@ -27,9 +27,6 @@ class Settings:
     notification_email: str
     cors_origins: list[str]
     lead_log_path: Path
-    supabase_url: str
-    supabase_key: str
-    supabase_table: str
 
 
 @lru_cache(maxsize=1)
@@ -60,9 +57,6 @@ def get_settings() -> Settings:
         notification_email=os.getenv("NOTIFICATION_EMAIL", "").strip(),
         cors_origins=cors_origins,
         lead_log_path=PROJECT_ROOT / "data" / "leads.csv",
-        supabase_url=os.getenv("SUPABASE_URL", "").strip().rstrip("/"),
-        supabase_key=os.getenv("SUPABASE_KEY", "").strip(),
-        supabase_table=os.getenv("SUPABASE_TABLE", "leads").strip() or "leads",
     )
 
 
