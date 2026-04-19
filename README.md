@@ -5,12 +5,12 @@ Aria is a simple real-estate lead qualification assistant with a FastAPI backend
 ## Features
 
 - Streamlit chat interface for real-estate conversations
-- FastAPI backend with `/health` and `/chat` endpoints
-- Gemini-powered assistant responses
-- Local fallback assistant logic for better reliability
+- FastAPI backend with `/health`, `/chat`, and `/sms` endpoints
+- Gemini-powered assistant responses (with local fallback)
 - Lead capture with name, budget, location, timeline, and intent
 - Automatic lead persistence to CSV
 - Optional email notification for completed leads
+- SMS webhook integration for incoming Twilio messages
 - Suggested meeting date for qualified buy/sell leads
 
 ## Project Structure
@@ -19,21 +19,27 @@ Aria is a simple real-estate lead qualification assistant with a FastAPI backend
 Agent_tutorial/
 ├── README.md
 └── ai-agent/
-    ├── .env.example
-    ├── requirements.txt
+    ├── .env                    # Environment variables (create from .env.example)
+    ├── .env.example            # Template for environment variables
+    ├── requirements.txt        # Python dependencies
+    ├── Procfile                # Deployment configuration (Heroku/Render)
+    ├── render.yaml             # Render.com deployment config
+    ├── runtime.txt             # Python version for deployment
     ├── backend/
-    │   ├── main.py
-    │   ├── llm.py
-    │   ├── logic.py
-    │   ├── emailer.py
-    │   └── booking.py
+    │   ├── main.py             # FastAPI app, /chat and /sms endpoints
+    │   ├── llm.py              # Gemini/LLM integration
+    │   ├── logic.py            # Conversation state & lead qualification
+    │   ├── emailer.py          # Email notifications
+    │   └── booking.py          # Meeting date suggestions
     ├── frontend/
-    │   └── app.py
+    │   └── app.py              # Streamlit chat interface
     ├── utils/
-    │   ├── config.py
-    │   └── sheets.py
+    │   ├── config.py           # Settings loader from .env
+    │   └── sheets.py           # Google Sheets integration
     └── data/
-        └── leads.csv
+        ├── leads.csv           # Completed leads (auto-created)
+        ├── conversations.json   # Chat history (auto-created)
+        └── leads.json          # Leads backup (optional)
 ```
 
 ## Requirements
@@ -97,39 +103,81 @@ Notes:
 - `GEMINI_TIMEOUT_SECONDS` is optional. Default is `30`.
 - If Gemini fails or times out, the backend falls back to local logic instead of breaking the chat.
 
+## SMS Configuration (Twilio)
+
+To enable SMS support:
+
+1. Get a Twilio account and phone number
+2. Set your webhook URL in Twilio console:
+   - **Messaging → Phone Numbers → Your Number → Messaging**
+   - **Webhook URL:** `https://your-domain:8000/sms`
+   - **HTTP Method:** POST
+3. When SMS arrives, Twilio sends `From`, `Body`, and `MessageSid`
+4. The backend routes the SMS through Gemini (or local fallback)
+5. The response is returned as TwiML XML for Twilio to send back
+
+Example SMS conversation:
+
+```
+User SMS:  "Hi, I want to buy a house in Miami"
+Response:  "That sounds exciting. Which area are you hoping to focus on?"
+
+User SMS:  "Downtown Miami"
+Response:  "Got it. What price range feels right for you?"
+```
+
+All SMS interactions are logged to `data/conversations.json` with `source: "sms"`.
+
 ## Run The App
 
-1. Navigate to the app directory and activate the virtual environment:
+### Quick Start (2 terminals)
+
+**Terminal 1: Start the backend**
 
 ```bash
 cd ai-agent
 source .venv/bin/activate
-```
-
-2. Start the backend in one terminal:
-
-```bash
 uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-3. Start the frontend in another terminal:
+**Terminal 2: Start the frontend**
 
 ```bash
+cd ai-agent
+source .venv/bin/activate
 streamlit run frontend/app.py --server.headless true --server.address 127.0.0.1 --server.port 8501
 ```
 
-4. Open the app in your browser:
+Then open: `http://127.0.0.1:8501`
 
-```text
-http://127.0.0.1:8501
+### With Custom Ports
+
+If `8000` or `8501` are busy, use different ports:
+
+```bash
+# Backend on port 8001
+uvicorn backend.main:app --host 127.0.0.1 --port 8001
+
+# Frontend on port 8502
+streamlit run frontend/app.py --server.port 8502
 ```
 
-### Optional: Force local assistant logic only
+Update `BACKEND_URL` in `.env` to match:
 
-If you want to disable Gemini and use only the local fallback:
+```env
+BACKEND_URL=http://127.0.0.1:8001
+```
+
+### Disable Gemini (use local fallback only)
 
 ```bash
 ENABLE_GEMINI=false uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Or edit `.env`:
+
+```env
+ENABLE_GEMINI=false
 ```
 
 ## API
@@ -140,7 +188,9 @@ ENABLE_GEMINI=false uvicorn backend.main:app --host 127.0.0.1 --port 8000
 curl http://127.0.0.1:8000/health
 ```
 
-### Chat
+### Chat Endpoint
+
+Send messages via JSON:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/chat \
@@ -167,6 +217,39 @@ Typical response shape:
   "reply": "That sounds exciting. Which area are you hoping to focus on?"
 }
 ```
+
+### SMS Webhook Endpoint
+
+Receive incoming SMS from Twilio and route to LLM:
+
+```bash
+curl -X POST http://127.0.0.1:8000/sms \
+  -d 'From=%2B15551234567' \
+  -d 'Body=I+want+to+buy+in+Miami' \
+  -d 'MessageSid=SM1234567890abcdef' \
+  -H "Content-Type: application/x-www-form-urlencoded"
+```
+
+Response is Twilio-compatible TwiML XML:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>That sounds exciting. Which area are you hoping to focus on?</Message>
+</Response>
+```
+
+**Configure your Twilio webhook to:**
+
+```text
+POST https://your-domain:8000/sms
+```
+
+Twilio automatically sends:
+- `From`: sender's phone number
+- `Body`: message text
+- `MessageSid`: unique message identifier
+
 
 ## Lead Storage
 
@@ -198,11 +281,14 @@ The CSV includes:
 
 ## How It Works
 
-1. The Streamlit frontend sends the full chat history to the backend.
-2. The backend tries Gemini first when enabled.
-3. If Gemini is unavailable, invalid, or times out, the backend falls back to local qualification logic.
-4. When a lead is sufficiently qualified, the backend marks it as completed.
-5. Completed leads are saved to CSV and can optionally trigger an email notification.
+1. **Chat requests** come from the Streamlit frontend or `/chat` API endpoint.
+2. **SMS requests** come from Twilio and hit the `/sms` webhook.
+3. Both are converted to `ChatMessage` objects and sent to the conversation logic.
+4. The backend tries Gemini (LLM) first when `ENABLE_GEMINI=true`.
+5. If Gemini is unavailable, invalid, or times out, the backend falls back to local qualification logic.
+6. When a lead is sufficiently qualified, the backend marks it as `completed`.
+7. Completed leads are saved to CSV and can optionally trigger an email notification.
+8. SMS responses are returned as Twilio-compatible TwiML XML.
 
 ## Troubleshooting
 
