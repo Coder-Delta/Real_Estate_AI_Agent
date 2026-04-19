@@ -106,22 +106,37 @@ Notes:
 
 ## Run The App
 
-Start the backend:
+1. Navigate to the app directory and activate the virtual environment:
 
 ```bash
-/home/zedx/Codes/Agent_tutorial/ai-agent/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+cd ai-agent
+source .venv/bin/activate
 ```
 
-Start the frontend in another terminal:
+2. Start the backend in one terminal:
 
 ```bash
-/home/zedx/Codes/Agent_tutorial/ai-agent/.venv/bin/python -m streamlit run frontend/app.py --server.headless true --server.address 127.0.0.1 --server.port 8501
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open the app:
+3. Start the frontend in another terminal:
+
+```bash
+streamlit run frontend/app.py --server.headless true --server.address 127.0.0.1 --server.port 8501
+```
+
+4. Open the app in your browser:
 
 ```text
 http://127.0.0.1:8501
+```
+
+### Optional: Force local assistant logic only
+
+If you want to disable Gemini and use only the local fallback:
+
+```bash
+ENABLE_GEMINI=false uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
 ## API
