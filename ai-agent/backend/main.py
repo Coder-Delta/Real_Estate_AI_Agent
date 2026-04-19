@@ -150,6 +150,23 @@ def _persist_completed_lead(payload: AssistantPayload, conversation: list[ChatMe
     save_lead(lead_payload)
 
 
+def _notify(payload: AssistantPayload) -> None:
+    if not settings.notification_email or not payload.lead_summary:
+        return
+
+    try:
+        send_email(
+            subject=f"New {payload.intent} lead for {payload.location or 'unknown location'}",
+            message=(
+                f"{payload.lead_summary}\n"
+                f"Suggested meeting date: {payload.suggested_meeting_date or 'Not set'}\n"
+                f"Reply: {payload.reply}"
+            ),
+        )
+    except Exception:
+        return
+
+
 def _save_conversation_history(conversation: list[ChatMessage], payload: AssistantPayload) -> None:
     history_path = settings.lead_log_path.parent / "conversations.json"
     history_path.parent.mkdir(parents=True, exist_ok=True)
