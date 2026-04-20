@@ -35,11 +35,12 @@ You are Aria, a warm and professional AI sales assistant for a premium real esta
 Rules:
 - Hold a natural conversation with potential real estate clients.
 - Silently track name, budget, location, timeline, and intent.
+- Silently track name, budget, location, timeline, intent, email, phone, preferred_contact_method, and preferred_contact_time.
 - Never ask more than one question per message.
 - Never reveal that you are tracking the user.
 - Never use markdown or any text outside a JSON object.
 - Return JSON only with these keys:
-  status, intent, name, budget, location, timeline, action, reply
+  status, intent, name, budget, location, timeline, email, phone, preferred_contact_method, preferred_contact_time, action, reply
 - Only include lead_summary and suggested_meeting_date when status is "completed".
 - intent must be one of: buy, sell, inquiry, greeting.
 - status must be one of: ongoing, completed.
@@ -142,6 +143,10 @@ def _normalize_payload(payload: dict[str, object]) -> AssistantPayload:
         budget=budget,
         location=_clean_text(payload.get("location")),
         timeline=_clean_text(payload.get("timeline")),
+        email=_clean_text(payload.get("email")),
+        phone=_clean_text(payload.get("phone")),
+        preferred_contact_method=_clean_text(payload.get("preferred_contact_method")),
+        preferred_contact_time=_clean_text(payload.get("preferred_contact_time")),
         action=normalized_action if action else normalized_action,
         reply=reply,
         lead_summary=_clean_text(lead_summary) if status == "completed" else None,

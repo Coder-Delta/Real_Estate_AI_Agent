@@ -58,6 +58,10 @@ class ChatResponse(BaseModel):
     budget: int | None
     location: str | None
     timeline: str | None
+    email: str | None
+    phone: str | None
+    preferred_contact_method: str | None
+    preferred_contact_time: str | None
     action: str
     reply: str
     lead_summary: str | None = None
@@ -139,6 +143,10 @@ def _persist_completed_lead(payload: AssistantPayload, conversation: list[ChatMe
         "budget": str(payload.budget) if payload.budget else None,
         "location": payload.location,
         "timeline": payload.timeline,
+        "email": payload.email,
+        "phone": payload.phone,
+        "preferred_contact_method": payload.preferred_contact_method,
+        "preferred_contact_time": payload.preferred_contact_time,
         "status": payload.status,
         "action": payload.action,
         "lead_summary": payload.lead_summary,

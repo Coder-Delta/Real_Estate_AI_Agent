@@ -99,6 +99,10 @@ class LeadState:
     budget: int | None = None
     location: str | None = None
     timeline: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    preferred_contact_method: str | None = None
+    preferred_contact_time: str | None = None
 
 
 @dataclass(slots=True)
@@ -109,6 +113,10 @@ class AssistantPayload:
     budget: int | None
     location: str | None
     timeline: str | None
+    email: str | None
+    phone: str | None
+    preferred_contact_method: str | None
+    preferred_contact_time: str | None
     action: str
     reply: str
     lead_summary: str | None = None
@@ -122,6 +130,10 @@ class AssistantPayload:
             "budget": self.budget,
             "location": self.location,
             "timeline": self.timeline,
+            "email": self.email,
+            "phone": self.phone,
+            "preferred_contact_method": self.preferred_contact_method,
+            "preferred_contact_time": self.preferred_contact_time,
             "action": self.action,
             "reply": self.reply,
         }
@@ -142,6 +154,10 @@ def build_assistant_payload(messages: list[ChatMessage]) -> AssistantPayload:
             budget=None,
             location=None,
             timeline=None,
+            email=None,
+            phone=None,
+            preferred_contact_method=None,
+            preferred_contact_time=None,
             action="none",
             reply="Hi, it’s lovely to connect. Are you looking to buy, sell, or just explore your options right now?",
         )
@@ -162,6 +178,10 @@ def build_assistant_payload(messages: list[ChatMessage]) -> AssistantPayload:
             budget=state.budget,
             location=state.location,
             timeline=state.timeline,
+            email=state.email,
+            phone=state.phone,
+            preferred_contact_method=state.preferred_contact_method,
+            preferred_contact_time=state.preferred_contact_time,
             action="finalize_lead",
             reply=_build_closing_reply(state, meeting_date),
             lead_summary=build_lead_summary(state),
@@ -175,6 +195,10 @@ def build_assistant_payload(messages: list[ChatMessage]) -> AssistantPayload:
         budget=state.budget,
         location=state.location,
         timeline=state.timeline,
+        email=state.email,
+        phone=state.phone,
+        preferred_contact_method=state.preferred_contact_method,
+        preferred_contact_time=state.preferred_contact_time,
         action="none",
         reply=_build_next_reply(state),
     )
@@ -191,6 +215,14 @@ def build_lead_summary(state: LeadState) -> str:
         parts.append(f"within {state.timeline}")
     if state.budget is not None:
         parts.append(f"with a budget of up to ${state.budget:,}")
+    if state.email:
+        parts.append(f"email: {state.email}")
+    if state.phone:
+        parts.append(f"phone: {state.phone}")
+    if state.preferred_contact_method:
+        parts.append(f"preferred contact: {state.preferred_contact_method}")
+    if state.preferred_contact_time:
+        parts.append(f"best time: {state.preferred_contact_time}")
 
     summary = " ".join(parts).strip()
     if not summary.endswith("."):
@@ -250,6 +282,22 @@ def _merge_state(state: LeadState, text: str) -> None:
         timeline = _extract_bare_timeline(text)
     if timeline:
         state.timeline = timeline
+
+    email = _extract_email(text)
+    if email:
+        state.email = email
+
+    phone = _extract_phone(text)
+    if phone:
+        state.phone = phone
+
+    preferred_contact_method = _extract_contact_method(text)
+    if preferred_contact_method:
+        state.preferred_contact_method = preferred_contact_method
+
+    preferred_contact_time = _extract_contact_time(text)
+    if preferred_contact_time:
+        state.preferred_contact_time = preferred_contact_time
 
     # If the user shared qualification details but explicit intent was missed,
     # move the conversation forward instead of staying in greeting mode.
@@ -374,6 +422,18 @@ def _build_next_reply(state: LeadState) -> str:
     if not state.timeline:
         return "That gives me a good sense of the search. How soon are you hoping to make a move?"
 
+    if not state.email:
+        return "Perfect. What is the best email address to reach you on?"
+
+    if not state.phone:
+        return "Thanks. Could you also share a phone number in case we need to confirm the call quickly?"
+
+    if not state.preferred_contact_method:
+        return "Great, and do you prefer we reach out by call, text, or email?"
+
+    if not state.preferred_contact_time:
+        return "What time of day is usually best for us to contact you?"
+
     if not state.name:
         return "You’ve given me a clear picture so far. What name should I use?"
 
@@ -442,6 +502,45 @@ def _extract_bare_name(text: str, state: LeadState) -> str | None:
     if candidate.split()[0].lower() in NAME_STOPWORDS:
         return None
     return candidate
+
+
+def _extract_email(text: str) -> str | None:
+    match = re.search(r"\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[A-Za-z]{2,}\b", text)
+    return match.group(0).lower() if match else None
+
+
+def _extract_phone(text: str) -> str | None:
+    match = re.search(r"(?:\+?\d[\d\-\s\(\)]{7,}\d)", text)
+    if not match:
+        return None
+    cleaned = re.sub(r"[^\d+]", "", match.group(0))
+    if len(re.sub(r"\D", "", cleaned)) < 8:
+        return None
+    return cleaned
+
+
+def _extract_contact_method(text: str) -> str | None:
+    normalized = text.lower()
+    if any(keyword in normalized for keyword in ("whatsapp", "text me", "sms", "text")):
+        return "text"
+    if any(keyword in normalized for keyword in ("email me", "mail me", "email")):
+        return "email"
+    if any(keyword in normalized for keyword in ("call me", "phone", "ring me")):
+        return "call"
+    return None
+
+
+def _extract_contact_time(text: str) -> str | None:
+    patterns = (
+        r"(?i)\b(morning|afternoon|evening)\b",
+        r"(?i)\b(anytime|business hours|work hours|after work|weekends?)\b",
+        r"(?i)\b(?:around|after|before|at)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(0).strip().lower()
+    return None
 
 
 def _sanitize_name(candidate: str) -> str:
