@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate Python syntax
+        run: python -m compileall ai-agent/backend ai-agent/frontend ai-agent/utils
+
+      - name: Smoke test backend
+        env:
+          ENABLE_GEMINI: "false"
+          BACKEND_URL: "http://127.0.0.1:8000"
+          CORS_ORIGINS: "http://127.0.0.1:8501"
+        working-directory: ai-agent
+        run: |
+          uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID" EXIT
+
+          python - <<'PY'
+          import json
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          def wait_for_health(url: str, timeout: float = 20.0) -> None:
+              deadline = time.time() + timeout
+              last_error = None
+              while time.time() < deadline:
+                  try:
+                      with urlopen(url, timeout=5) as response:
+                          payload = json.loads(response.read().decode("utf-8"))
+                      if payload.get("status") == "ok":
+                          return
+                  except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+                      last_error = exc
+                  time.sleep(1)
+              raise RuntimeError(f"Backend did not become healthy in time: {last_error}")
+
+          wait_for_health("http://127.0.0.1:8000/health")
+
+          body = {
+              "messages": [
+                  {"role": "user", "content": "I want to buy an apartment in Miami"}
+              ]
+          }
+
+          request = Request(
+              "http://127.0.0.1:8000/chat",
+              data=json.dumps(body).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+
+          with urlopen(request, timeout=10) as response:
+              payload = json.loads(response.read().decode("utf-8"))
+
+          assert payload["status"] in {"ongoing", "completed"}, payload
+          assert payload["intent"] in {"buy", "sell", "inquiry", "greeting"}, payload
+          assert isinstance(payload["reply"], str) and payload["reply"].strip(), payload
+          print("Smoke test passed")
+          PY
